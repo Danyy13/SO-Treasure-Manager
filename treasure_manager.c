@@ -18,6 +18,8 @@
 #define FILE_CLOSE_ERROR 5
 #define FILE_WRITE_ERROR 6
 #define MKDIR_ERROR 7
+#define ARGUMENT_COUNT_ERROR 8
+#define NO_HUNT_NAME_ERROR 9
 
 typedef struct dirent FileInfo;
 
@@ -128,13 +130,70 @@ uint8_t add(char *huntId, Treasure treasure) {
     return 0;
 }
 
-int main(void) {
-    Treasure treasure = {0};
-    getNewTreasureFromStandardInput(&treasure);
+uint8_t list(char *huntId) {
+    // print hunt name
 
-    printTreasure(treasure);
+    // print total file size
 
-    if(add("000", treasure) != 0) printf("Eroare la adaugare\n");
+    // print last modification
+
+    // for treasure in the file, print the treasure
+    // open the file, write the binary values to a treasure, print treasure, close file
+     
+}
+
+typedef enum {
+    ADD,
+    LIST,
+    VIEW,
+    REMOVE_TREASURE,
+    REMOVE_HUNT
+}OPERATION;
+
+int8_t encodeOperation(char *arg) {
+    if(strcmp(arg, "--add") == 0) return ADD;
+    else if(strcmp(arg, "--list") == 0) return LIST;
+    else if(strcmp(arg, "--view") == 0) return VIEW;
+    else if(strcmp(arg, "--remove-treasure") == 0) return REMOVE_TREASURE;
+    else if(strcmp(arg, "--remove-hunt") == 0) return REMOVE_HUNT;
+    else return -1;
+}
+
+int main(int argc, char *argv[]) {    
+    if(argc <= 1) {
+        printf("Nu sunt destule argumente\n");
+        exit(ARGUMENT_COUNT_ERROR);
+    }
+
+    int8_t operation = encodeOperation(argv[1]);
+
+    switch(operation) {
+        case ADD:
+            if(argc != 3) {
+                printf("No hunt name\n");
+                exit(NO_HUNT_NAME_ERROR);
+            }
+            Treasure treasure = {0};
+            getNewTreasureFromStandardInput(&treasure);
+            printTreasure(treasure);
+            if(add(argv[2], treasure) != 0) printf("Eroare la adaugare\n");
+            break;
+        case LIST:
+            printf("list\n");
+            break;
+        case VIEW:
+            printf("view\n");
+            break;
+        case REMOVE_TREASURE:
+            printf("remove-treasure\n");
+            break;
+        case REMOVE_HUNT:
+            printf("remove-hunt\n");
+            break;
+        default:
+            printf("Wrong operation\n");
+            break;
+    }
 
     return 0;
 }

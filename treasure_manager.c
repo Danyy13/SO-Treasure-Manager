@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <time.h>
+
+#define TREASURE_FILE_NAME "treasureInfo.txt"
 
 #define NAME_SIZE 31
 #define CLUE_SIZE 127
@@ -20,8 +23,13 @@
 #define MKDIR_ERROR 7
 #define ARGUMENT_COUNT_ERROR 8
 #define NO_HUNT_NAME_ERROR 9
+#define TREASURE_FILE_EXISTS_ERROR 10
+#define TREASURE_FILE_ACCESS_ERROR 11
+#define MALLOC_ERROR 12
+#define FILE_READ_ERROR 13
 
 typedef struct dirent FileInfo;
+typedef struct stat Stat;
 
 typedef struct {
     double x;
@@ -35,6 +43,14 @@ typedef struct {
     char userName[NAME_SIZE + 1];
     char clueText[CLUE_SIZE + 1];
 }Treasure;
+
+void printTime(struct timespec *time) {
+    struct tm *tmInfo = localtime(&time->tv_sec);
+    char buffer[100];
+
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", tmInfo);
+    printf("[%s.%09ld]\n", buffer, time->tv_nsec);
+}
 
 void getNewTreasureFromStandardInput(Treasure *treasure) {
     printf("ID: ");
@@ -72,27 +88,36 @@ void printTreasure(Treasure treasure) {
     printf(", %d\n", treasure.value);
 }
 
-uint8_t add(char *huntId, Treasure treasure) {
-    // verifica daca exista deja hunt-ul folosind functia de biblioteca
-    DIR *currentDir = opendir(".");
-    if(currentDir == NULL) {
-        fprintf(stderr, "Directorul curent nu a putut fi deschis\n");
-        exit(DIRECTORY_OPEN_ERROR);
-    }
-
+FileInfo *getFileByName(DIR *currentDir, char *fileName) {
+    // un director e defapt un fisier deci se pot gasi si directoare
     // parcurge toate fisierele din directorul curent si vezi daca exista id-ul hunt-ului
     FileInfo *file = NULL;
-    uint8_t directoryExists = 0;
     while((file = readdir(currentDir)) != NULL) {
         // printf("%s\n", file->d_name);
-        if(strcmp(file->d_name, huntId) == 0) { // daca fisierul are numele hunt-ului ne oprim
-            directoryExists = 1;
-            break;
+        if(strcmp(file->d_name, fileName) == 0) { // daca fisierul are numele hunt-ului ne oprim
+            return file;
         }
     }
+    return NULL;
+}
+
+DIR *openDirectory(char *directoryName) {
+    DIR *directory = opendir(directoryName);
+    if(directory == NULL) {
+        perror("Directorul curent nu a putut fi deschis\n");
+        exit(DIRECTORY_OPEN_ERROR);
+    }
+    return directory;
+}
+
+uint8_t add(char *huntId, Treasure treasure) {
+    // verifica daca exista deja hunt-ul folosind functia de biblioteca
+    DIR *currentDir = openDirectory(".");
+    
+    FileInfo *directory = getFileByName(currentDir, huntId);
 
     // daca directorul nu exista il cream
-    if(!directoryExists) {
+    if(!directory) {
         if(mkdir(huntId, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) == -1) {
             return MKDIR_ERROR;
         }
@@ -101,14 +126,14 @@ uint8_t add(char *huntId, Treasure treasure) {
     // daca exista il deschidem
     DIR *huntDir = opendir(huntId);
     if(huntDir == NULL) {
-        fprintf(stderr, "Directorul nu a putut fi deschis\n");
+        perror("Directorul nu a putut fi deschis\n");
         exit(DIRECTORY_OPEN_ERROR);
     }
 
     // deschidem/cream fisierul in directorul hunt-ului
     int treasureInfoFile = openat(dirfd(huntDir), "treasureInfo.txt", O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
     if(treasureInfoFile == -1) {
-        fprintf(stderr, "Fisierul nu a putut fi deschis\n");
+        perror("Fisierul nu a putut fi deschis\n");
         exit(FILE_OPEN_ERROR);
     }
 
@@ -117,13 +142,13 @@ uint8_t add(char *huntId, Treasure treasure) {
 
     // inchidem fisierul
     if(close(treasureInfoFile) == -1) {
-        fprintf(stderr, "Fisierul nu a putut fi inchis\n");
+        perror("Fisierul nu a putut fi inchis\n");
         exit(FILE_CLOSE_ERROR);
     }
 
     // inchidem directorul
     if(closedir(huntDir) == -1) {
-        fprintf(stderr, "Directorul nu a putut fi inchis\n");
+        perror("Directorul nu a putut fi inchis\n");
         exit(DIRECTORY_CLOSE_ERROR);
     }
 
@@ -131,15 +156,89 @@ uint8_t add(char *huntId, Treasure treasure) {
 }
 
 uint8_t list(char *huntId) {
+    DIR *currentDir = openDirectory(".");
+
+    FileInfo *directory = getFileByName(currentDir, huntId);
+
+    if(!directory) {
+        printf("Directorul nu exista\n");
+        return DIRECTORY_EXISTS_ERROR;
+    }
+
+    DIR *huntDir = opendir(huntId);
+    if(huntDir == NULL) {
+        perror("Directorul nu a putut fi deschis\n");
+        exit(DIRECTORY_OPEN_ERROR);
+    }
+
     // print hunt name
+    printf("Hunt: ");
+    printf("%s\n", huntId);
 
     // print total file size
+    FileInfo *treasureFileInfo = getFileByName(huntDir, TREASURE_FILE_NAME);
+    if(!treasureFileInfo) {
+        perror("Fisierul cu treasures nu exista\n");
+        return TREASURE_FILE_EXISTS_ERROR;
+    }
 
-    // print last modification
+    // retine datele fisierului intr-un Stat = struct stat folosind functia stat
+    chdir(huntId);
+    Stat *treasureFileStat = (Stat *)malloc(sizeof(Stat));
+    if(!treasureFileStat) {
+        perror("Eroare la alocare memorie statFile\n");
+        exit(MALLOC_ERROR);
+    }
+    if(stat(TREASURE_FILE_NAME, treasureFileStat) == -1) {
+        perror("Eroare la accesare fisier treasures\n");
+        return TREASURE_FILE_EXISTS_ERROR;
+    }
+    chdir("..");
+
+    // printeaza numele, marimea si data ultimei modificari
+    printf("%s\t%ld\t", TREASURE_FILE_NAME, treasureFileStat->st_size);
+    printTime(&(treasureFileStat->st_mtim));
 
     // for treasure in the file, print the treasure
     // open the file, write the binary values to a treasure, print treasure, close file
-     
+
+    int treasureInfoFile = openat(dirfd(huntDir), "treasureInfo.txt", O_RDWR | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
+    if(treasureInfoFile == -1) {
+        perror("Fisierul nu a putut fi deschis\n");
+        exit(FILE_OPEN_ERROR);
+    }
+
+    // citim datele din fisier in Treasure
+    Treasure *treasure = (Treasure *)malloc(sizeof(Treasure));
+    if(!treasure) {
+        perror("Eroare la alocare memorie treasure\n");
+        exit(MALLOC_ERROR);
+    }
+    ssize_t readValue = 0;
+    while((readValue = read(treasureInfoFile, treasure, sizeof(Treasure))) != 0) {
+        if(readValue == -1) {
+            perror("Eroare la citire din fisier\n");
+            exit(FILE_READ_ERROR);
+        }
+        printTreasure(*treasure);
+    }
+
+    free(treasure);
+
+    // inchidem fisierul
+    if(close(treasureInfoFile) == -1) {
+        perror("Fisierul nu a putut fi inchis\n");
+        exit(FILE_CLOSE_ERROR);
+    }
+
+    if(closedir(huntDir) == -1) {
+        perror("Directorul nu a putut fi inchis\n");
+        exit(DIRECTORY_CLOSE_ERROR);
+    }
+
+    free(treasureFileStat);
+
+    return 0;
 }
 
 typedef enum {
@@ -179,7 +278,11 @@ int main(int argc, char *argv[]) {
             if(add(argv[2], treasure) != 0) printf("Eroare la adaugare\n");
             break;
         case LIST:
-            printf("list\n");
+            if(argc != 3) {
+                printf("No hunt name\n");
+                exit(NO_HUNT_NAME_ERROR);
+            }
+            list(argv[2]);
             break;
         case VIEW:
             printf("view\n");

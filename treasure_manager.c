@@ -27,6 +27,8 @@
 #define TREASURE_FILE_ACCESS_ERROR 11
 #define MALLOC_ERROR 12
 #define FILE_READ_ERROR 13
+#define WRONG_ARGUMENT_NUMBER_ERROR 14
+#define DIRECTORY_CHANGE_ERROR 15
 
 typedef struct dirent FileInfo;
 typedef struct stat Stat;
@@ -110,6 +112,13 @@ DIR *openDirectory(char *directoryName) {
     return directory;
 }
 
+void closeDirectory(DIR *directory) {
+    if(closedir(directory) == -1) {
+        perror("Directorul nu a putut fi inchis\n");
+        exit(DIRECTORY_CLOSE_ERROR);
+    }
+}
+
 uint8_t add(char *huntId, Treasure treasure) {
     // verifica daca exista deja hunt-ul folosind functia de biblioteca
     DIR *currentDir = openDirectory(".");
@@ -124,11 +133,7 @@ uint8_t add(char *huntId, Treasure treasure) {
     }
 
     // daca exista il deschidem
-    DIR *huntDir = opendir(huntId);
-    if(huntDir == NULL) {
-        perror("Directorul nu a putut fi deschis\n");
-        exit(DIRECTORY_OPEN_ERROR);
-    }
+    DIR *huntDir = openDirectory(huntId);
 
     // deschidem/cream fisierul in directorul hunt-ului
     int treasureInfoFile = openat(dirfd(huntDir), "treasureInfo.txt", O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
@@ -147,10 +152,9 @@ uint8_t add(char *huntId, Treasure treasure) {
     }
 
     // inchidem directorul
-    if(closedir(huntDir) == -1) {
-        perror("Directorul nu a putut fi inchis\n");
-        exit(DIRECTORY_CLOSE_ERROR);
-    }
+    closeDirectory(huntDir);
+
+    closeDirectory(currentDir);
 
     return 0;
 }
@@ -159,17 +163,12 @@ uint8_t list(char *huntId) {
     DIR *currentDir = openDirectory(".");
 
     FileInfo *directory = getFileByName(currentDir, huntId);
-
     if(!directory) {
         printf("Directorul nu exista\n");
         return DIRECTORY_EXISTS_ERROR;
     }
 
-    DIR *huntDir = opendir(huntId);
-    if(huntDir == NULL) {
-        perror("Directorul nu a putut fi deschis\n");
-        exit(DIRECTORY_OPEN_ERROR);
-    }
+    DIR *huntDir = openDirectory(huntId);
 
     // print hunt name
     printf("Hunt: ");
@@ -201,7 +200,6 @@ uint8_t list(char *huntId) {
 
     // for treasure in the file, print the treasure
     // open the file, write the binary values to a treasure, print treasure, close file
-
     int treasureInfoFile = openat(dirfd(huntDir), "treasureInfo.txt", O_RDWR | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
     if(treasureInfoFile == -1) {
         perror("Fisierul nu a putut fi deschis\n");
@@ -231,12 +229,136 @@ uint8_t list(char *huntId) {
         exit(FILE_CLOSE_ERROR);
     }
 
-    if(closedir(huntDir) == -1) {
-        perror("Directorul nu a putut fi inchis\n");
-        exit(DIRECTORY_CLOSE_ERROR);
-    }
+    closeDirectory(huntDir);
+
+    closeDirectory(currentDir);
 
     free(treasureFileStat);
+
+    return 0;
+}
+
+uint8_t view(char *huntId, int treasureId) {
+    DIR *currentDir = openDirectory(".");
+
+    FileInfo *directory = getFileByName(currentDir, huntId);
+    if(!directory) {
+        printf("Directorul nu exista\n");
+        return DIRECTORY_EXISTS_ERROR;
+    }
+
+    DIR *huntDir = openDirectory(huntId);
+
+    int treasureInfoFile = openat(dirfd(huntDir), "treasureInfo.txt", O_RDWR | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
+    if(treasureInfoFile == -1) {
+        perror("Fisierul nu a putut fi deschis\n");
+        exit(FILE_OPEN_ERROR);
+    }
+
+    // citim datele din fisier in Treasure
+    int treasureFound = 0;
+    Treasure *treasure = (Treasure *)malloc(sizeof(Treasure));
+    if(!treasure) {
+        perror("Eroare la alocare memorie treasure\n");
+        exit(MALLOC_ERROR);
+    }
+    ssize_t readValue = 0;
+    while((readValue = read(treasureInfoFile, treasure, sizeof(Treasure))) != 0) {
+        if(readValue == -1) {
+            perror("Eroare la citire din fisier\n");
+            exit(FILE_READ_ERROR);
+        }
+        // printTreasure(*treasure);
+        if(treasure->id == treasureId) {
+            printTreasure(*treasure);
+            treasureFound = 1;
+            break; // nu mai exista alt treasure cu acelasi ID
+        }
+    }
+    
+    free(treasure);
+
+    // inchidem fisierul
+    if(close(treasureInfoFile) == -1) {
+        perror("Fisierul nu a putut fi inchis\n");
+        exit(FILE_CLOSE_ERROR);
+    }
+
+    closeDirectory(huntDir);
+
+    closeDirectory(currentDir);
+
+    if(treasureFound != 1) {
+        printf("Nu s-a gasit treasure-ul\n");
+    }
+
+    return 0;
+}
+
+uint8_t removeTreasure(char *huntId, int treasureId) {
+    DIR *currentDir = openDirectory(".");
+
+    FileInfo *directory = getFileByName(currentDir, huntId);
+    if(!directory) {
+        printf("Directorul nu exista\n");
+        return DIRECTORY_EXISTS_ERROR;
+    }
+
+    DIR *huntDir = openDirectory(huntId);
+
+
+
+    closeDirectory(huntDir);
+
+    closeDirectory(currentDir);
+
+    return 0;
+}
+
+void removeFileFromDirectory(DIR *directory, char *fileName) {
+    // sterge fisierul cu numele fileName din directorul dat de calea RELATIVA directory
+
+    if(fchdir(dirfd(directory)) == -1) {
+        perror("Nu s-a putut deschide directorul\n");
+        exit(DIRECTORY_CHANGE_ERROR);
+    }
+
+    if(remove(fileName) != 0) {
+        perror("Nu s-a putut sterge fisierul\n");
+    }
+
+    chdir("..");
+}
+
+uint8_t removeHunt(char *huntId) {
+    DIR *currentDir = openDirectory(".");
+
+    FileInfo *directory = getFileByName(currentDir, huntId);
+    if(!directory) {
+        printf("Directorul nu exista\n");
+        return DIRECTORY_EXISTS_ERROR;
+    }
+
+    DIR *huntDir = openDirectory(huntId);
+
+    // cauta daca exista fisierul
+    int treasureFileFound = 0;
+    FileInfo* entry = NULL;
+    while ((entry = readdir(huntDir)) != NULL) {
+        if(strcmp(entry->d_name, TREASURE_FILE_NAME) == 0) {
+            treasureFileFound = 1;
+        }
+    }
+
+    if(treasureFileFound) removeFileFromDirectory(huntDir, TREASURE_FILE_NAME);
+
+    if(remove(huntId) != 0 ) {
+        perror("Nu s-a putut sterge directorul\n");
+    }
+
+    closeDirectory(huntDir);
+
+    closeDirectory(currentDir);
 
     return 0;
 }
@@ -253,8 +375,8 @@ int8_t encodeOperation(char *arg) {
     if(strcmp(arg, "--add") == 0) return ADD;
     else if(strcmp(arg, "--list") == 0) return LIST;
     else if(strcmp(arg, "--view") == 0) return VIEW;
-    else if(strcmp(arg, "--remove-treasure") == 0) return REMOVE_TREASURE;
-    else if(strcmp(arg, "--remove-hunt") == 0) return REMOVE_HUNT;
+    else if(strcmp(arg, "--remove_treasure") == 0) return REMOVE_TREASURE;
+    else if(strcmp(arg, "--remove_hunt") == 0) return REMOVE_HUNT;
     else return -1;
 }
 
@@ -285,16 +407,29 @@ int main(int argc, char *argv[]) {
             list(argv[2]);
             break;
         case VIEW:
-            printf("view\n");
+            // printf("view\n");
+            if(argc != 4) {
+                printf("Nu sunt destule argumente\nview <huntId> <treasureId>\n");
+                exit(WRONG_ARGUMENT_NUMBER_ERROR);
+            }
+            if(view(argv[2], atoi(argv[3])) != 0) {
+                printf("Eroare la view\n");
+            }
             break;
         case REMOVE_TREASURE:
             printf("remove-treasure\n");
             break;
         case REMOVE_HUNT:
-            printf("remove-hunt\n");
+            // printf("remove-hunt\n");
+            if(argc != 3) {
+                printf("Nu sunt destule argumente\nremove_hunt <huntId>\n");
+                exit(WRONG_ARGUMENT_NUMBER_ERROR);
+            }
+            if(removeHunt(argv[2]) != 0) printf("Eroare la stergere hunt\n");
             break;
         default:
             printf("Wrong operation\n");
+            
             break;
     }
 

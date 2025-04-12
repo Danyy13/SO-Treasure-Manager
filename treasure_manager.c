@@ -10,9 +10,11 @@
 #include <time.h>
 
 #define TREASURE_FILE_NAME "treasureInfo.txt"
+#define LOG_FILE_NAME "logged_hunt.txt"
 
 #define NAME_SIZE 31
 #define CLUE_SIZE 127
+#define LOG_MESSAGE_SIZE 50
 
 #define DIRECTORY_EXISTS_ERROR 1
 #define DIRECTORY_CLOSE_ERROR 2
@@ -30,6 +32,7 @@
 #define WRONG_ARGUMENT_NUMBER_ERROR 14
 #define DIRECTORY_CHANGE_ERROR 15
 #define TREASURE_OFFSET_ERROR 16
+#define CREATE_LOG_ERROR 17
 
 typedef struct dirent FileInfo;
 typedef struct stat Stat;
@@ -120,6 +123,51 @@ void closeDirectory(DIR *directory) {
     }
 }
 
+char *getCurrentTime() {
+    time_t rawTime;
+    struct tm *timeNow = NULL;
+
+    time(&rawTime);
+    timeNow = localtime(&rawTime);
+
+    // sterg '\n' de la final
+    char *timeString = asctime(timeNow); 
+    int timeNowLength = strlen(timeString);
+    timeString[timeNowLength - 1] = '\0';
+
+    return timeString;
+}
+
+int createLog(char *huntId, char *logMessage) {
+    chdir(huntId);
+    
+    int logFile = open(LOG_FILE_NAME, O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
+    if(logFile == -1) {
+        perror("Fisierul nu a putut fi deschis\n");
+        chdir("..");
+        return FILE_OPEN_ERROR;
+    }
+
+    char *currentTime = getCurrentTime();
+    // printf("%ld\n", strlen(currentTime));
+
+    int finalLogSize = strlen(currentTime) + strlen(logMessage) + 5;
+    char *finalLog = (char *)malloc(finalLogSize);
+    if(!finalLog) {
+        perror("Eroare la alocare memorie mesaj log\n");
+        exit(MALLOC_ERROR);
+    }
+    sprintf(finalLog, "[%s] %s\n\n", currentTime, logMessage);
+
+    write(logFile, finalLog, strlen(finalLog));
+
+    close(logFile);
+    
+    chdir("..");
+    
+    return 0;
+}
+
 uint8_t add(char *huntId, Treasure treasure) {
     // verifica daca exista deja hunt-ul folosind functia de biblioteca
     DIR *currentDir = openDirectory(".");
@@ -137,7 +185,7 @@ uint8_t add(char *huntId, Treasure treasure) {
     DIR *huntDir = openDirectory(huntId);
 
     // deschidem/cream fisierul in directorul hunt-ului
-    int treasureInfoFile = openat(dirfd(huntDir), "treasureInfo.txt", O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
+    int treasureInfoFile = openat(dirfd(huntDir), TREASURE_FILE_NAME, O_WRONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
     if(treasureInfoFile == -1) {
         perror("Fisierul nu a putut fi deschis\n");
         exit(FILE_OPEN_ERROR);
@@ -150,6 +198,13 @@ uint8_t add(char *huntId, Treasure treasure) {
     if(close(treasureInfoFile) == -1) {
         perror("Fisierul nu a putut fi inchis\n");
         exit(FILE_CLOSE_ERROR);
+    }
+
+    char *logMessage = (char *)malloc(LOG_MESSAGE_SIZE);
+    sprintf(logMessage, "Added treasure <%hd> to hunt <%s>", treasure.id, huntId);
+    if(createLog(huntId, logMessage) == -1) {
+        perror("Eroare la creare log\n");
+        return CREATE_LOG_ERROR;
     }
 
     // inchidem directorul
@@ -230,6 +285,13 @@ uint8_t list(char *huntId) {
         exit(FILE_CLOSE_ERROR);
     }
 
+    char *logMessage = (char *)malloc(LOG_MESSAGE_SIZE);
+    sprintf(logMessage, "Listed treasures in hunt <%s>", huntId);
+    if(createLog(huntId, logMessage) == -1) {
+        perror("Eroare la creare log\n");
+        return CREATE_LOG_ERROR;
+    }
+
     closeDirectory(huntDir);
 
     closeDirectory(currentDir);
@@ -283,6 +345,13 @@ uint8_t view(char *huntId, int treasureId) {
     if(close(treasureInfoFile) == -1) {
         perror("Fisierul nu a putut fi inchis\n");
         exit(FILE_CLOSE_ERROR);
+    }
+
+    char *logMessage = (char *)malloc(LOG_MESSAGE_SIZE);
+    sprintf(logMessage, "Viewed treasure <%hd> in hunt <%s>", treasureId, huntId);
+    if(createLog(huntId, logMessage) == -1) {
+        perror("Eroare la creare log\n");
+        return CREATE_LOG_ERROR;
     }
 
     closeDirectory(huntDir);
@@ -411,6 +480,13 @@ uint8_t removeTreasure(char *huntId, int treasureId) {
 
     // printf("%d\n", treasureOffset);
 
+    char *logMessage = (char *)malloc(LOG_MESSAGE_SIZE);
+    sprintf(logMessage, "Removed treasure <%hd> from hunt <%s>", treasureId, huntId);
+    if(createLog(huntId, logMessage) == -1) {
+        perror("Eroare la creare log\n");
+        return CREATE_LOG_ERROR;
+    }
+
     closeDirectory(huntDir);
 
     closeDirectory(currentDir);
@@ -439,6 +515,7 @@ uint8_t removeHunt(char *huntId) {
     }
 
     if(treasureFileFound) removeFileFromDirectory(huntDir, TREASURE_FILE_NAME);
+    removeFileFromDirectory(huntDir, LOG_FILE_NAME);
 
     if(remove(huntId) != 0 ) {
         perror("Nu s-a putut sterge directorul\n");

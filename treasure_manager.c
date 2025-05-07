@@ -317,6 +317,31 @@ uint8_t list(char *huntId, DIR *currentDir, DIR *huntDir) {
     return 0;
 }
 
+uint8_t listHunts(DIR *currentDir) {
+    FileInfo *file = NULL;
+    while((file = readdir(currentDir)) != NULL) {
+        if(file->d_type == DT_DIR && file->d_name[0] != '.') { // daca este folder
+            chdir(file->d_name);
+            Stat *treasureFileStat = (Stat *)malloc(sizeof(Stat));
+            if(!treasureFileStat) {
+                perror("Eroare la alocare memorie statFile\n");
+                exit(MALLOC_ERROR);
+            }
+            if(stat(TREASURE_FILE_NAME, treasureFileStat) == -1) {
+                perror("Eroare la accesare fisier treasures\n");
+                return TREASURE_FILE_EXISTS_ERROR;
+            }
+            chdir("..");
+
+            int treasureCount = treasureFileStat->st_size / sizeof(Treasure);
+            // printf("sizeofFile: %ld\n", treasureFileStat->st_size);
+
+            printf("%s - %d treasures\n", file->d_name, treasureCount);
+        }
+    }
+    return 1;
+}
+
 uint8_t view(char *huntId, int treasureId, DIR *currentDir, DIR *huntDir) {
     int treasureInfoFile = openat(dirfd(huntDir), "treasureInfo.txt", O_RDONLY | O_CREAT | O_APPEND, S_IRUSR | S_IWUSR);
     if(treasureInfoFile == -1) {
@@ -517,7 +542,8 @@ typedef enum {
     LIST,
     VIEW,
     REMOVE_TREASURE,
-    REMOVE_HUNT
+    REMOVE_HUNT,
+    LIST_HUNTS
 }OPERATION;
 
 int8_t encodeOperation(char *arg) {
@@ -526,6 +552,7 @@ int8_t encodeOperation(char *arg) {
     else if(strcmp(arg, "--view") == 0) return VIEW;
     else if(strcmp(arg, "--remove_treasure") == 0) return REMOVE_TREASURE;
     else if(strcmp(arg, "--remove_hunt") == 0) return REMOVE_HUNT;
+    else if(strcmp(arg, "--list_hunts") == 0) return LIST_HUNTS;
     else return -1;
 }
 
@@ -543,6 +570,11 @@ int main(int argc, char *argv[]) {
 
     // verifica daca exista deja hunt-ul folosind functia de biblioteca
     DIR *currentDir = openDirectory(".");
+
+    if(operation == LIST_HUNTS) {
+        listHunts(currentDir);
+        return 0;
+    }
     
     char *huntId = argv[2];
     FileInfo *hunt = getFileByName(currentDir, huntId);

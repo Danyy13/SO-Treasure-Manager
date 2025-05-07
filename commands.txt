@@ -1,0 +1,3 @@
+./treasure_manager --list_hunts
+./treasure_manager --list 000
+./treasure_manager --view 000 123

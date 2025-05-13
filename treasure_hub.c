@@ -3,6 +3,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <signal.h>
+#include <sys/types.h>
+#include <dirent.h>
+
+typedef struct dirent FileInfo;
 
 typedef enum {
     START_MONITOR,
@@ -10,7 +14,8 @@ typedef enum {
     LIST_TREASURES,
     VIEW_TREASURE,
     STOP_MONITOR,
-    EXIT
+    EXIT,
+    CALCULATE_SCORE
 }CommandCode;
 
 #define COMMANDS_FILENAME "commands.txt"
@@ -100,6 +105,45 @@ void startMonitor() {
     monitorRunning = 1;
 }
 
+void calculateScoreFunction() {
+    // deschide directorul curent
+    DIR *currentDir = opendir(".");
+    if(currentDir == NULL) {
+        perror("Directorul curent nu a putut fi deschis\n");
+        exit(-1);
+    }
+
+    int pid = 0;
+
+    // get each existing hunt
+    FileInfo *file = NULL;
+    while((file = readdir(currentDir)) != NULL) {
+        if(file->d_type == DT_DIR && file->d_name[0] != '.') {
+            // printf("%s\n", file->d_name);
+            chdir(file->d_name);
+            
+            // create a separate process for each hunt
+            if((pid = fork()) < 0) {
+                printf("Eroare la deschidere proces\n");
+                exit(-100);
+            }
+
+            // calculate score on hunt on each child process
+            if(pid == 0) {
+                char *args[] = {"../calc", NULL};
+                execvp(args[0], args);
+            }
+
+            chdir("..");
+        }
+    }
+    
+    if(closedir(currentDir) == -1) {
+        perror("Directorul nu a putut fi inchis\n");
+        exit(-2);
+    }
+}
+
 int encodeCommand(char *commandName) {
     if(strcmp(commandName, "start_monitor") == 0) return START_MONITOR;
     if(strcmp(commandName, "list_hunts") == 0) return LIST_HUNTS;
@@ -107,6 +151,7 @@ int encodeCommand(char *commandName) {
     if(strcmp(commandName, "view_treasure") == 0) return VIEW_TREASURE;
     if(strcmp(commandName, "stop_monitor") == 0) return STOP_MONITOR;
     if(strcmp(commandName, "exit") == 0) return EXIT;
+    if(strcmp(commandName, "calculate_score") == 0) return CALCULATE_SCORE;
     return -1;
 }
 
@@ -177,32 +222,39 @@ void executeCommand(int commandCode) {
         case EXIT:
             hubExit();
             break;
+        case CALCULATE_SCORE:
+            printf("calculate score upcoming...\n");
+            break;
         default:
             printf("Comanda este gresita\n");
             break;
     }
 }
 
+// int main() {
+//     char commandName[MAX_COMMAND_SIZE];
+//     int commandCode = -1;
+
+//     assignSignals();
+
+//     commandsFile = fopen(COMMANDS_FILENAME, "w");
+//     if(commandsFile == NULL) {
+//         perror("Eroare la deschidere fisier\n");
+//         exit(-1);
+//     }
+
+//     while(scanf("%s", commandName)) {
+//         // printf("%s\n", commandName);
+//         commandCode = encodeCommand(commandName);
+
+//         // printf("command code: %d\n", commandCode);
+
+//         executeCommand(commandCode);
+//     }
+
+//     return 0;
+// }
+
 int main() {
-    char commandName[MAX_COMMAND_SIZE];
-    int commandCode = -1;
-
-    assignSignals();
-
-    commandsFile = fopen(COMMANDS_FILENAME, "w");
-    if(commandsFile == NULL) {
-        perror("Eroare la deschidere fisier\n");
-        exit(-1);
-    }
-
-    while(scanf("%s", commandName)) {
-        // printf("%s\n", commandName);
-        commandCode = encodeCommand(commandName);
-
-        // printf("command code: %d\n", commandCode);
-
-        executeCommand(commandCode);
-    }
-
-    return 0;
+    calculateScoreFunction();
 }

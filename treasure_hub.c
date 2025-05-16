@@ -5,8 +5,7 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <dirent.h>
-
-typedef struct dirent FileInfo;
+#include "utils.h"
 
 typedef enum {
     START_MONITOR,
@@ -24,8 +23,6 @@ typedef enum {
 #define LIST_TAG "--list"
 #define VIEW_TAG "--view"
 #define LIST_HUNTS_TAG "--list_hunts"
-
-#define MAX_COMMAND_SIZE 20
 
 int childPid = 0;
 int monitorRunning = 0;
@@ -106,42 +103,27 @@ void startMonitor() {
 }
 
 void calculateScoreFunction() {
-    // deschide directorul curent
-    DIR *currentDir = opendir(".");
-    if(currentDir == NULL) {
-        perror("Directorul curent nu a putut fi deschis\n");
+    int calcPid = 0;
+
+    if((calcPid = fork()) < 0) {
+        perror("Nu s-a putut crea procesul calculator de scor\n");
         exit(-1);
     }
 
-    int pid = 0;
+    // creaza pipe
 
-    // get each existing hunt
-    FileInfo *file = NULL;
-    while((file = readdir(currentDir)) != NULL) {
-        if(file->d_type == DT_DIR && file->d_name[0] != '.') {
-            // printf("%s\n", file->d_name);
-            chdir(file->d_name);
-            
-            // create a separate process for each hunt
-            if((pid = fork()) < 0) {
-                printf("Eroare la deschidere proces\n");
-                exit(-100);
-            }
-
-            // calculate score on hunt on each child process
-            if(pid == 0) {
-                char *args[] = {"../calc", NULL};
-                execvp(args[0], args);
-            }
-
-            chdir("..");
-        }
-    }
+    if(calcPid == 0) {
+        // scrie in pipe prin redirectare la stdout
+        
     
-    if(closedir(currentDir) == -1) {
-        perror("Directorul nu a putut fi inchis\n");
-        exit(-2);
+        execl("./calc", "calc", (char *)NULL);
+
+        perror("Nu s-a putut apela procesul calc\n");
+        exit(-1);
     }
+
+    // proces parinte - citeste din pipe
+
 }
 
 int encodeCommand(char *commandName) {
@@ -223,7 +205,9 @@ void executeCommand(int commandCode) {
             hubExit();
             break;
         case CALCULATE_SCORE:
-            printf("calculate score upcoming...\n");
+            if(checkMonitorNotRunning() == 1) break;
+
+            calculateScoreFunction();
             break;
         default:
             printf("Comanda este gresita\n");
@@ -231,30 +215,26 @@ void executeCommand(int commandCode) {
     }
 }
 
-// int main() {
-//     char commandName[MAX_COMMAND_SIZE];
-//     int commandCode = -1;
-
-//     assignSignals();
-
-//     commandsFile = fopen(COMMANDS_FILENAME, "w");
-//     if(commandsFile == NULL) {
-//         perror("Eroare la deschidere fisier\n");
-//         exit(-1);
-//     }
-
-//     while(scanf("%s", commandName)) {
-//         // printf("%s\n", commandName);
-//         commandCode = encodeCommand(commandName);
-
-//         // printf("command code: %d\n", commandCode);
-
-//         executeCommand(commandCode);
-//     }
-
-//     return 0;
-// }
-
 int main() {
-    calculateScoreFunction();
+    char commandName[MAX_COMMAND_SIZE];
+    int commandCode = -1;
+
+    assignSignals();
+
+    commandsFile = fopen(COMMANDS_FILENAME, "w");
+    if(commandsFile == NULL) {
+        perror("Eroare la deschidere fisier\n");
+        exit(-1);
+    }
+
+    while(scanf("%s", commandName)) {
+        // printf("%s\n", commandName);
+        commandCode = encodeCommand(commandName);
+
+        // printf("command code: %d\n", commandCode);
+
+        executeCommand(commandCode);
+    }
+
+    return 0;
 }

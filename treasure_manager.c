@@ -8,12 +8,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <time.h>
+#include "utils.h"
 
-#define TREASURE_FILE_NAME "treasureInfo.txt"
 #define LOG_FILE_NAME "logged_hunt"
 
-#define NAME_SIZE 31
-#define CLUE_SIZE 127
 #define LOG_MESSAGE_SIZE 50
 
 #define LONG_PRINT 1
@@ -39,21 +37,7 @@
 #define SYMBOLIC_LINK_CREATION_ERROR 18
 #define TREASURE_READ_ERROR 19
 
-typedef struct dirent FileInfo;
 typedef struct stat Stat;
-
-typedef struct {
-    double x;
-    double y;
-}Coordinates;
-
-typedef struct {
-    uint16_t id;
-    int value;
-    Coordinates coordinates;
-    char userName[NAME_SIZE + 1];
-    char clueText[CLUE_SIZE + 1];
-}Treasure;
 
 void printTime(struct timespec *time) {
     struct tm *tmInfo = localtime(&time->tv_sec);

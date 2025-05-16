@@ -3,8 +3,8 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <string.h>
+#include "utils.h"
 
-#define MAX_COMMAND_SIZE 100
 #define MONITOR_STOP_DELAY_SECONDS 7
 
 char commandName[MAX_COMMAND_SIZE];

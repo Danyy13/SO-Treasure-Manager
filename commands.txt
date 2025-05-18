@@ -1,0 +1,4 @@
+./calc
+./treasure_manager --list_hunts
+./treasure_manager --list 000
+./calc

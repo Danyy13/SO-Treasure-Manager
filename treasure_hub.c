@@ -7,6 +7,14 @@
 #include <dirent.h>
 #include "utils.h"
 
+#define COMMANDS_FILENAME "commands.txt"
+
+#define MANAGER_CALL "./treasure_manager"
+#define CALCULATE_SCORE_CALL "./calc"
+#define LIST_TAG "--list"
+#define VIEW_TAG "--view"
+#define LIST_HUNTS_TAG "--list_hunts"
+
 typedef enum {
     START_MONITOR,
     LIST_HUNTS,
@@ -16,13 +24,6 @@ typedef enum {
     EXIT,
     CALCULATE_SCORE
 }CommandCode;
-
-#define COMMANDS_FILENAME "commands.txt"
-
-#define MANAGER_CALL "./treasure_manager"
-#define LIST_TAG "--list"
-#define VIEW_TAG "--view"
-#define LIST_HUNTS_TAG "--list_hunts"
 
 int childPid = 0;
 int monitorRunning = 0;
@@ -100,30 +101,6 @@ void startMonitor() {
     }
 
     monitorRunning = 1;
-}
-
-void calculateScoreFunction() {
-    int calcPid = 0;
-
-    if((calcPid = fork()) < 0) {
-        perror("Nu s-a putut crea procesul calculator de scor\n");
-        exit(-1);
-    }
-
-    // creaza pipe
-
-    if(calcPid == 0) {
-        // scrie in pipe prin redirectare la stdout
-        
-    
-        execl("./calc", "calc", (char *)NULL);
-
-        perror("Nu s-a putut apela procesul calc\n");
-        exit(-1);
-    }
-
-    // proces parinte - citeste din pipe
-
 }
 
 int encodeCommand(char *commandName) {
@@ -207,7 +184,12 @@ void executeCommand(int commandCode) {
         case CALCULATE_SCORE:
             if(checkMonitorNotRunning() == 1) break;
 
-            calculateScoreFunction();
+            sprintf(stringToSend, CALCULATE_SCORE_CALL);
+
+            fprintf(commandsFile, "%s\n", stringToSend);
+            fflush(commandsFile);
+
+            kill(childPid, SIGUSR1);
             break;
         default:
             printf("Comanda este gresita\n");

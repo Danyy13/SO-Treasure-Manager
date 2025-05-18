@@ -12,6 +12,13 @@
 
 typedef struct dirent FileInfo;
 
+/* Pipe Utils */
+#define READ_END pfd[0]
+#define WRITE_END pfd[1]
+#define STDIN 0
+#define STDOUT 1
+#define MAX_STRING_SIZE 1000
+
 typedef struct {
     double x;
     double y;

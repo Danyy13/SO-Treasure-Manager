@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <string.h>
+#include <sys/wait.h>
 #include "utils.h"
 
 #define MONITOR_STOP_DELAY_SECONDS 7
@@ -24,12 +25,72 @@ void handlerFunction() {
         perror("Eroare la citire in monitor\n");
         exit(-1);
     }
+
     // printf("Codul comenzii: %s\n", commandName);
 
-    if(system(commandName) < 0) {
-        perror("Eroare la apelare treasure manager\n");
+    // int pipeMonitorToFunction[2] = {0, 0};
+    int pipeFunctionToMonitor[2] = {0, 0};
+    int processId = 0;
+
+    // if(pipe(pipeMonitorToFunction) < 0) {
+        // perror("Eroare la crearea pipe-ului\n");
+	    // exit(-1);
+    // }
+
+    if(pipe(pipeFunctionToMonitor) < 0) {
+        perror("Eroare la crearea pipe-ului\n");
+	    exit(-1);
+    }
+
+    if((processId = fork()) < 0) {
+        perror("Eroare la apelare sistem\n");
         exit(-1);
     }
+
+    if(processId == 0) { // fiu
+        // close(pipeMonitorToFunction[1]);
+        close(pipeFunctionToMonitor[0]);
+
+        // dup2(pipeMonitorToFunction[0], STDIN_FILENO);
+        dup2(pipeFunctionToMonitor[1], STDOUT_FILENO);
+
+        // apelez un shell care sa execute comanda (prin argumentul -c) commandName
+        // ca sa pot apela fork() si exec() separat folosind un singur string ca argument
+        // altfel ar trebui sa fac probabil strtok() pe string si sa il dau in *args[] pt exec
+        execlp("sh", "sh", "-c", commandName, (char *)NULL);
+
+        perror("Eroare execlp sistem\n");
+        exit(-1);
+    }
+
+    // close(pipeMonitorToFunction[0]);
+    close(pipeFunctionToMonitor[1]);
+
+    char string[MAX_STRING_SIZE];
+    ssize_t bytesRead = read(pipeFunctionToMonitor[0], string, MAX_STRING_SIZE);
+    if(bytesRead < 0) {
+        perror("Eroare la citire din pipe in monitor\n");
+        exit(-1);
+    }
+    string[bytesRead] = '\0'; // punem caracterul terminal la finalul string-ului ca sa evitam existenta unei zone de memorie aditionale nedorite
+    
+    int status = 0;
+    if(waitpid(processId, &status, 0) < 0) {
+        perror("Eroare la waitpid\n");
+        exit(-1);
+    }
+
+    close(pipeFunctionToMonitor[0]);
+
+    // printam stringul la stdout dar vom face o redirectare la capatul pipe-ului in crearea procesului monitor din treasure_hub.c
+    printf("%s\n", string);
+    fflush(stdout);
+
+    // metoda cu system => nu pot face RW in pipe
+    // if(system(commandName) < 0) {
+    //     perror("Eroare la apelare sistem\n");
+    //     exit(-1);
+    // }
 }
 
 void stopMonitorHandler() {

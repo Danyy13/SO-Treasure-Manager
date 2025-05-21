@@ -13,6 +13,7 @@
 #define LOG_FILE_NAME "logged_hunt"
 
 #define LOG_MESSAGE_SIZE 50
+#define SYMLINK_PATH_MAX 100
 
 #define LONG_PRINT 1
 #define SHORT_PRINT 0
@@ -190,12 +191,12 @@ int createLog(char *huntId, char *logMessage, DIR *rootDir) {
     
     chdir("..");
 
-    // creaza link simbolic in root    
+    // creaza link simbolic in root
     FileInfo *symbolicLink = getFileByName(rootDir, logFileName);
     if(symbolicLink) return 0;
 
     if(symlinkat(logFileName, dirfd(rootDir), logFileName) == -1) {
-        perror("Eroare la creare link simbolic\n");
+        // perror("Eroare la creare link simbolic aaa\n");
         return SYMBOLIC_LINK_CREATION_ERROR;
     }
     

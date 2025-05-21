@@ -1,1 +1,0 @@
-monitor received: ./treasure_manager --list 000

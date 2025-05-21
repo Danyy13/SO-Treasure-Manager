@@ -28,14 +28,8 @@ void handlerFunction() {
 
     // printf("Codul comenzii: %s\n", commandName);
 
-    // int pipeMonitorToFunction[2] = {0, 0};
     int pipeFunctionToMonitor[2] = {0, 0};
     int processId = 0;
-
-    // if(pipe(pipeMonitorToFunction) < 0) {
-        // perror("Eroare la crearea pipe-ului\n");
-	    // exit(-1);
-    // }
 
     if(pipe(pipeFunctionToMonitor) < 0) {
         perror("Eroare la crearea pipe-ului\n");
@@ -48,10 +42,8 @@ void handlerFunction() {
     }
 
     if(processId == 0) { // fiu
-        // close(pipeMonitorToFunction[1]);
-        close(pipeFunctionToMonitor[0]);
+        close(pipeFunctionToMonitor[0]); // inchid capatul de citire
 
-        // dup2(pipeMonitorToFunction[0], STDIN_FILENO);
         dup2(pipeFunctionToMonitor[1], STDOUT_FILENO);
 
         // apelez un shell care sa execute comanda (prin argumentul -c) commandName
@@ -63,8 +55,7 @@ void handlerFunction() {
         exit(-1);
     }
 
-    // close(pipeMonitorToFunction[0]);
-    close(pipeFunctionToMonitor[1]);
+    close(pipeFunctionToMonitor[1]); // inchid capatul de scriere
 
     char string[MAX_STRING_SIZE];
     ssize_t bytesRead = read(pipeFunctionToMonitor[0], string, MAX_STRING_SIZE);
